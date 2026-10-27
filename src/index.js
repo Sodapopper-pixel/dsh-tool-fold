@@ -69,13 +69,20 @@ export function apply(ctx) {
 
   const presets = () => ctx.get('agentPresets')
 
-  /** The presets the page may scope a group to. */
+  /**
+   * The presets the page may scope a group to.
+   * `name` is omitted for a preset that declares none: those are the shipped presets, whose
+   * display copy the page localizes. Substituting the id here would erase that distinction.
+   */
   async function presetList() {
     const service = presets()
     if (service === undefined) return []
     try {
       const list = await service.list()
-      return list.map(preset => ({ id: preset.id, name: preset.name ?? preset.id }))
+      return list.map(preset => ({
+        id: preset.id,
+        ...preset.name === undefined ? {} : { name: preset.name },
+      }))
     } catch (error) {
       log.warn?.(`tool-fold: could not list presets: ${messageOf(error)}`)
       return []

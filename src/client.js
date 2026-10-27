@@ -25,16 +25,21 @@ export const en = {
   addAggregate: 'Add aggregate group',
   remove: 'Remove',
   name: 'Query tool name',
-  nameHint: 'The model sees this name. Letters, digits and underscores.',
   kind: 'Kind',
   kindFold: 'Fold group (reveal on demand)',
   kindAggregate: 'Aggregate group (proxy only)',
   presets: 'Applies to presets',
   presetsEmpty: 'No presets reported by this Host. A group without a preset never applies.',
+  presetStandard: 'Standard mode',
+  presetPtc: 'PTC mode',
+  presetMinimal: 'Minimal mode',
+  presetCordis: 'Creator mode',
   tools: 'Bound tools',
   toolFilter: 'Filter tools',
   toolManual: 'Add a tool name',
+  toolManualHint: 'For a tool the picker cannot see yet. Remove a binding with ×.',
   toolAdd: 'Add',
+  unbind: 'Unbind',
   toolsEmpty: 'Bind at least one tool.',
   usageNote: 'Extra usage note',
   usageNoteHint: 'Prepended to what the model reads for this group. Leave empty to use only the tool descriptions.',
@@ -68,16 +73,21 @@ export const zh = {
   addAggregate: '新增聚合组',
   remove: '删除',
   name: '查询工具名',
-  nameHint: '模型看到的就是这个名字，只能用字母、数字与下划线。',
   kind: '类型',
   kindFold: '折叠组（按需展开）',
   kindAggregate: '聚合组（只代执行）',
   presets: '生效预设',
   presetsEmpty: '本宿主没有报告任何预设。不绑定预设的组不会生效。',
+  presetStandard: '标准模式',
+  presetPtc: 'PTC 模式',
+  presetMinimal: '极简模式',
+  presetCordis: '创造模式',
   tools: '绑定工具',
   toolFilter: '筛选工具',
   toolManual: '手动添加工具名',
+  toolManualHint: '用于工具选择器还看不到的工具；已绑定的工具点 × 移除。',
   toolAdd: '添加',
+  unbind: '移出绑定',
   toolsEmpty: '至少绑定一个工具。',
   usageNote: '补充用法说明',
   usageNoteHint: '会加在模型读到的该组说明前面。留空则只用工具自身的描述。',
@@ -91,6 +101,30 @@ export const zh = {
 
 /** New group id; ids are local and never reach the model. */
 let sequence = 0
+
+/**
+ * Dictionary keys carrying one shipped preset's display name. The Harness resolves the same four
+ * ids through its own client dictionary; this plugin cannot import that dictionary, so it carries
+ * the names itself. A preset that publishes its own name is never translated.
+ */
+const BUILT_IN_PRESET_NAMES = {
+  standard: 'presetStandard',
+  ptc: 'presetPtc',
+  minimal: 'presetMinimal',
+  cordis: 'presetCordis',
+}
+
+/**
+ * The name to show for one roster preset.
+ * @param preset - one preset row from the Host snapshot.
+ * @param t - active copy lookup.
+ * @returns the localized built-in name, or the preset's declared name / id.
+ */
+export function presetLabel(preset, t) {
+  const key = preset.name === undefined ? BUILT_IN_PRESET_NAMES[preset.id] : undefined
+  if (key !== undefined) return t(key)
+  return preset.name ?? preset.id
+}
 
 /** A fresh group with the current defaults. */
 function newGroup(kind, defaults) {
@@ -226,21 +260,7 @@ function ToolFoldSection(props) {
         select(draft.defaults.listingForm, [
           ['list', t('formList')],
           ['search', t('formSearch')],
-        ], value => updateDefaults({ listingForm: value }))),
-      React.createElement('label', { className: 'tf-field tf-inline' },
-        React.createElement('input', {
-          type: 'checkbox',
-          checked: draft.defaults.idleRetract.enabled,
-          onChange: event => updateDefaults({
-            idleRetract: { ...draft.defaults.idleRetract, enabled: event.target.checked },
-          }),
-        }),
-        React.createElement('span', null, t('idleRetract'))),
-      React.createElement('label', { className: 'tf-field' },
-        React.createElement('span', null, t('idleRounds')),
-        number(draft.defaults.idleRetract.rounds, 1, 200, value => updateDefaults({
-          idleRetract: { ...draft.defaults.idleRetract, rounds: value },
-        })))),
+        ], value => updateDefaults({ listingForm: value })))),
 
     React.createElement('section', null,
       React.createElement('h3', null, t('groups')),
@@ -307,6 +327,13 @@ function GroupCard(props) {
         : [...group.presets, id],
     })
   }
+  /** Bind a hand-typed name; the picker cannot offer tools it has never seen. */
+  const addManual = () => {
+    const name = manual.trim()
+    if (name === '' || group.tools.includes(name)) return
+    onChange({ tools: [...group.tools, name] })
+    setManual('')
+  }
 
   return React.createElement('article', { className: 'tf-card' },
     React.createElement('header', { className: 'tf-card-head' },
@@ -320,8 +347,7 @@ function GroupCard(props) {
         value: group.name,
         placeholder: 'github',
         onChange: event => onChange({ name: event.target.value }),
-      }),
-      React.createElement('small', { className: 'tf-muted' }, t('nameHint'))),
+      })),
 
     React.createElement('label', { className: 'tf-field' },
       React.createElement('span', null, t('kind')),
@@ -344,7 +370,7 @@ function GroupCard(props) {
               checked: group.presets.includes(preset.id),
               onChange: () => togglePreset(preset.id),
             }),
-            React.createElement('span', null, preset.name))))),
+            React.createElement('span', null, presetLabel(preset, t)))))),
 
     React.createElement('div', { className: 'tf-field' },
       React.createElement('span', null, t('tools')),
@@ -383,16 +409,21 @@ function GroupCard(props) {
         React.createElement('button', {
           type: 'button',
           className: 'tf-button',
-          onClick: () => {
-            const name = manual.trim()
-            if (name === '' || group.tools.includes(name)) return
-            onChange({ tools: [...group.tools, name] })
-            setManual('')
-          },
+          onClick: addManual,
         }, t('toolAdd'))),
+      React.createElement('small', { className: 'tf-muted' }, t('toolManualHint')),
       group.tools.length === 0
         ? React.createElement('small', { className: 'tf-muted' }, t('toolsEmpty'))
-        : React.createElement('small', { className: 'tf-muted' }, group.tools.join(', '))),
+        : React.createElement('div', { className: 'tf-bound' }, group.tools.map(name =>
+          React.createElement('span', { key: name, className: 'tf-bound-chip' },
+            React.createElement('span', null, name),
+            React.createElement('button', {
+              type: 'button',
+              className: 'tf-bound-remove',
+              title: t('unbind'),
+              'aria-label': `${t('unbind')}: ${name}`,
+              onClick: () => onChange({ tools: group.tools.filter(item => item !== name) }),
+            }, '×'))))),
 
     fold
       ? React.createElement('div', { className: 'tf-field' },

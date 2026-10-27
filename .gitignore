@@ -4,3 +4,4 @@ lib/
 Thumbs.db
 *.log
 *.tmp
+.playwright-cli/

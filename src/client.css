@@ -95,6 +95,27 @@
   color: inherit;
 }
 
+/*
+ * The native dropdown popup is painted by the browser, not by our transparent
+ * input rule, so its rows fall back to the platform palette. Pin both the
+ * popup background and its text to the active theme's tokens; without this the
+ * dark theme lists dark text on a dark popup.
+ */
+.tf-field select {
+  color-scheme: light;
+  background: var(--dsw-alias-bg-layer-2, transparent);
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+body[data-ds-dark-theme] .tf-field select {
+  color-scheme: dark;
+}
+
+.tf-field select option {
+  background: var(--dsw-alias-bg-layer-2, #1c2028);
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
 .tf-field textarea {
   resize: vertical;
   line-height: 1.5;
@@ -151,6 +172,48 @@
 .tf-tool-taken {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.tf-bound {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tf-bound-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 2px 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 127, 127, 0.28);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.tf-bound-remove {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.tf-bound-remove:hover {
+  opacity: 0.95;
+}
+
+.tf-idle-rounds {
+  gap: 8px;
+}
+
+.tf-idle-rounds input[type='number'] {
+  width: 76px;
 }
 
 .tf-actions {
