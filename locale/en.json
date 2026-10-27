@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Tool fold (fold a tool batch into one query tool)",
+    "description": "Fold a batch of registered tools out of the model-visible surface, per agent preset: query and reveal them when needed, or hand them to an aggregate group that calls them on the model's behalf."
+  }
+}
