@@ -13,6 +13,7 @@ export const en = {
   saving: 'Saving…',
   reload: 'Reload',
   saved: 'Saved.',
+  unsaved: 'Unsaved changes',
   listingForm: 'Query form',
   formList: 'List tool names',
   formSearch: 'Summary with search',
@@ -72,6 +73,7 @@ export const zh = {
   saving: '保存中…',
   reload: '重新读取',
   saved: '已保存。',
+  unsaved: '当前配置未保存',
   listingForm: '查询形态',
   formList: '列举工具名',
   formSearch: '概括加搜索',
@@ -228,10 +230,12 @@ function ToolFoldSection(props) {
   const [draft, setDraft] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState(null)
+  const [baseline, setBaseline] = React.useState(null)
 
   const adopt = (next) => {
     setState(next)
     setDraft(next.config)
+    setBaseline(JSON.stringify(next.config))
     setNotice(null)
   }
 
@@ -253,6 +257,16 @@ function ToolFoldSection(props) {
   const updateGroup = (id, patch) => update({
     groups: draft.groups.map(group => (group.id === id ? { ...group, ...patch } : group)),
   })
+  /** Edits made since the configuration on disk was last read or saved. */
+  const dirty = baseline !== null && JSON.stringify(draft) !== baseline
+  const statusOf = () => {
+    if (notice !== null && notice.tone === 'error') {
+      return React.createElement('span', { className: 'tf-save-error', role: 'status' }, notice.text)
+    }
+    if (dirty) return React.createElement('span', { className: 'tf-dirty', role: 'status' }, t('unsaved'))
+    if (notice !== null) return React.createElement('span', { className: 'tf-saved', role: 'status' }, notice.text)
+    return null
+  }
 
   const save = () => {
     setBusy(true)
@@ -313,10 +327,7 @@ function ToolFoldSection(props) {
         disabled: busy,
         onClick: reload,
       }, t('reload')),
-      notice === null ? null : React.createElement('span', {
-        className: notice.tone === 'ok' ? 'tf-saved' : 'tf-save-error',
-        role: 'status',
-      }, notice.text)))
+      statusOf()))
 }
 
 /** One group card. */
@@ -513,13 +524,15 @@ function GroupCard(props) {
 
 /**
  * The source label one catalog entry shows in the picker.
- * Falls back to the name's own `mcp__<server>__` prefix so a page served by a Host that predates
- * the source fields still classifies MCP tools correctly.
+ * The Host resolves the provider — builtin capability or the package that registers a plugin
+ * tool. A page served by an older Host has no provider, so the name's `mcp__<server>__` prefix
+ * still classifies MCP tools and everything else falls back to the generic label.
  * @param entry - one catalog row from the Host snapshot.
  * @param t - active copy lookup.
- * @returns the MCP server name when the tool came from one, otherwise the generic origin label.
+ * @returns the provider label the Host resolved, else a prefix-derived one.
  */
 export function originLabel(entry, t) {
+  if (typeof entry.provider === 'string' && entry.provider !== '') return entry.provider
   const server = entry.server ?? /^mcp__(.+?)__/.exec(entry.name)?.[1]
   if (entry.origin === 'tool' || server === undefined) return t('originTool')
   return `${t('originMcp')}: ${server}`

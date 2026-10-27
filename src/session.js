@@ -1,6 +1,7 @@
 /** Per-agent installation: query tools, folded bindings, late registrations, and proxy calls. */
 
 import { createQueryTool } from './tools.js'
+import { collectPluginTools, describeProvider } from './origins.js'
 import { groupsForPreset } from './store.js'
 
 /** Sentinel denied name used to read the restrictable name set out of the registry's rejection message. */
@@ -21,15 +22,34 @@ const NO_TEXT = '(no text output)'
  */
 export class SessionRegistry {
   /**
-   * @param options - Host context, logger, and the configuration reader.
+   * @param options - Host context, logger, the configuration reader, and the profile's
+   *   `node_modules` used to attribute tool registrations to packages.
    */
-  constructor({ ctx, log, readConfig }) {
+  constructor({ ctx, log, readConfig, nodeModules }) {
     this.ctx = ctx
     this.log = log
     this.readConfig = readConfig
+    this.nodeModules = nodeModules
     this.sessions = new Map()
     this.catalogByScope = new Map()
+    this.providers = undefined
     this.depth = 0
+  }
+
+  /**
+   * Tool names registered by installed packages, scanned once.
+   * @returns tool name → package name, or an empty map when the scan cannot run.
+   */
+  pluginTools() {
+    if (this.providers === undefined) {
+      try {
+        this.providers = collectPluginTools(this.nodeModules)
+      } catch (error) {
+        this.log.warn?.(`tool-fold: could not scan ${this.nodeModules} for tool providers: ${error?.message ?? error}`)
+        this.providers = new Map()
+      }
+    }
+    return this.providers
   }
 
   /** Whether a registry mutation is in flight, so our own `tools/change` echo is ignored. */
@@ -259,9 +279,11 @@ export class SessionRegistry {
     }
     const entries = []
     const own = this.ownRegistered()
+    const pluginTools = this.pluginTools()
     for (const [name, schema] of [...globalSchemas, ...presetSchemas]) {
       if (name === 'run_code' || own.has(name)) continue
       const server = mcpServerOf(name)
+      const { kind, provider } = describeProvider(name, { server, pluginTools })
       entries.push({
         name,
         description: schema?.description ?? '',
@@ -269,6 +291,8 @@ export class SessionRegistry {
         origin: server === undefined ? 'tool' : 'mcp',
         server,
         layer: globalSchemas.has(name) ? 'global' : 'preset',
+        providerKind: kind,
+        provider,
       })
     }
     return entries.sort((left, right) => left.name.localeCompare(right.name))

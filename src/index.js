@@ -3,6 +3,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { emptyConfig, normalizeConfig, validateConfig } from './store.js'
 import { SessionRegistry } from './session.js'
 import { HttpError, readJsonBody, refused, sendJson } from './http.js'
@@ -33,13 +34,21 @@ export function dataPaths() {
 }
 
 /**
+ * The profile's `node_modules`, read by the settings page's provenance scan.
+ * @returns the directory holding the installed packages, including this one.
+ */
+function installedPackages() {
+  return fileURLToPath(new URL('..', import.meta.url))
+}
+
+/**
  * Mount the fold runtime, the assembly capture hook, and the settings routes.
  * @param ctx - Host context providing the tool registry, the Web carrier, and connection admission.
  */
 export function apply(ctx) {
   const log = ctx.logger ?? console
   const paths = dataPaths()
-  const registry = new SessionRegistry({ ctx, log, readConfig: () => config })
+  const registry = new SessionRegistry({ ctx, log, readConfig: () => config, nodeModules: installedPackages() })
   let config = emptyConfig()
   const ready = load().catch((error) => {
     log.warn?.(`tool-fold: could not read ${paths.config}: ${messageOf(error)}`)

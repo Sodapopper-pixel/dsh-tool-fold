@@ -367,6 +367,16 @@ body[data-ds-dark-theme] .tf-saved {
   color: #5ddb92;
 }
 
+.tf-dirty {
+  font-size: 12px;
+  font-weight: 500;
+  color: #b7791f;
+}
+
+body[data-ds-dark-theme] .tf-dirty {
+  color: #e5b567;
+}
+
 .tf-save-error {
   font-size: 12px;
   color: #c2413f;
