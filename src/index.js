@@ -118,7 +118,9 @@ export function apply(ctx) {
     const prompt = ctx.get('systemPrompt')
     ctx.effect(() => prompt.tools((context) => {
       if (context.scope !== undefined) registry.capture(context.scope, ctx.tools.schemas(context.scope))
-      return undefined
+      // The registry reads `result.schemas` unconditionally on every assembly, so a provider
+      // that observes the scope must still contribute an empty surface rather than `undefined`.
+      return { schemas: [] }
     }), 'tool-fold: capture assembled tool surfaces')
   }
 

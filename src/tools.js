@@ -35,9 +35,10 @@ export function createQueryTool({ group, runtime }) {
         type: 'object',
         additionalProperties: false,
         properties: {
-          text: { type: 'string', required: true },
-          ok: { type: 'boolean', required: true },
+          text: { type: 'string' },
+          ok: { type: 'boolean' },
         },
+        required: ['ok', 'text'],
       },
       render(_args, value) {
         return [{ type: 'text', text: value.text }]
