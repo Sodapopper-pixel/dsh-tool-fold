@@ -112,7 +112,7 @@ export function apply(ctx) {
     const next = normalizeConfig(body)
     const presetsAvailable = await presetList()
     const problems = validateConfig(next, {
-      toolNames: new Set(registry.knownSchemas().keys()),
+      toolNames: new Set(registry.catalog().map(entry => entry.name)),
       presetIds: new Set(presetsAvailable.map(preset => preset.id)),
     })
     if (problems.length > 0) throw new HttpError(400, 'config-invalid', problems.map(problem => problem.message).join('\n'))

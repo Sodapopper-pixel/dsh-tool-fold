@@ -136,3 +136,15 @@ config:
 - `tools/change` 在全局上下文是否覆盖每个 scoped 层的变化，还是需要按会话再去重（当前实现在该事件上全量重算，成本可接受）。
 - PTC 模式下被折叠工具的代执行（`parent` 已设）与 `collapses()` 的实际交互。
 - 闲置自动收回的轮次来源：会话事件里有 `turn/start`、`turn/end`，但未找到第三方插件可订阅的入口，暂未接。
+## 本地验收
+
+页面改动要验证的是"Cordis 装配出来的真实页面"，不是浏览器 bundle 自己，所以验收跑在真 Host 上：
+
+1. `node scripts/build.mjs && node scripts/sync-installed.mjs --apply`，刷新页面（只改客户端时不必重启 Host）。
+2. `python tests/verify_page.py <token URL>`：量面板折叠、间距、工具行数与详情块（不写入配置）。
+3. `python tests/verify_save.py <token URL>`：新增一个组、勾一个工具、保存，读页脚提示。
+4. `python tests/probe_details.py <token URL>`：读一个工具详情里的来源、层、描述与原始 JSON 结构。
+
+Host 侧改动（例如 `catalog()` 的字段、保存校验）不在客户端 bundle 里，必须重启 Host 才生效。会话中途不能自己重启 Host——本会话的 shell 是 Host 的后代进程，杀 Host 会连会话一起结束；重启交给用户（`dsh-web-stop.bat` 再 `dsh-web.bat`）。
+
+不想动真 Host 的配置时，可以另起一个隔离 `DSH_HOME`：`dsh plugin --profile web add "file:<本仓库>"`，再 `dsh web --no-open --port 3091`（默认 3080 被真 Host 占着）。隔离实例的目录里留过一份：`C:\Users\21621\dsh-backups\tool-fold-verify-home`。

@@ -60,6 +60,7 @@ export class SessionRegistry {
       agent,
       presetId,
       ownNames: new Set(),
+      registered: new Set(),
       available: new Set(),
       groups: new Map(),
     }
@@ -77,25 +78,40 @@ export class SessionRegistry {
     record.ownNames = new Set(groups.map(group => group.name))
     for (const [id, state] of record.groups) {
       if (!desired.has(id)) {
-        this.lift(state)
-        state.disposeTool?.()
-        record.groups.delete(id)
+        this.releaseGroup(record, id)
       }
     }
     for (const group of groups) {
       const existing = record.groups.get(group.id)
-      if (existing !== undefined) {
+      if (existing !== undefined && existing.group.name === group.name) {
         existing.group = group
         continue
       }
+      // A renamed group keeps its id but needs a new registration: the old tool name is gone.
+      if (existing !== undefined) this.releaseGroup(record, group.id)
       const state = { group, folded: new Set(), expanded: new Set(), restrictOff: undefined, disposeTool: undefined, rounds: new Map() }
       state.disposeTool = record.agent.ctx.tools.register(createQueryTool({
         group,
         runtime: this.runtimeFor(record, state),
       }))
+      record.registered.add(group.name)
       record.groups.set(group.id, state)
     }
     this.refreshBindings(record)
+  }
+
+  /**
+   * Drop one installed group: reveal what it folded and unregister its query tool.
+   * @param record - the session record owning the group.
+   * @param id - the group id to release.
+   */
+  releaseGroup(record, id) {
+    const state = record.groups.get(id)
+    if (state === undefined) return
+    this.lift(state)
+    state.disposeTool?.()
+    record.registered.delete(state.group.name)
+    record.groups.delete(id)
   }
 
   /**
@@ -212,6 +228,19 @@ export class SessionRegistry {
   }
 
   /**
+   * Query tool names this plugin registered itself across live sessions.
+   * A group's own tool lands in the session scope, so the assembly captures it; the page must not
+   * offer it back as a bindable tool, and a group must not be rejected for colliding with itself.
+   */
+  ownRegistered() {
+    const names = new Set()
+    for (const record of this.sessions.values()) {
+      for (const name of record.registered) names.add(name)
+    }
+    return names
+  }
+
+  /**
    * The catalog the settings page offers.
    * Each row carries what the page shows: the tool's own description, its raw parameter schema,
    * the protocol origin (`mcp__<server>__<tool>` names come from an MCP server), and whether the
@@ -229,8 +258,9 @@ export class SessionRegistry {
       }
     }
     const entries = []
+    const own = this.ownRegistered()
     for (const [name, schema] of [...globalSchemas, ...presetSchemas]) {
-      if (name === 'run_code') continue
+      if (name === 'run_code' || own.has(name)) continue
       const server = mcpServerOf(name)
       entries.push({
         name,

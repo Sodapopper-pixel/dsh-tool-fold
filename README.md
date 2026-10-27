@@ -24,7 +24,7 @@ src/tools.js    查询工具的 schema、描述与 op 分发（纯函数，可�
 src/store.js    配置归一化与校验（纯函数，可单测）
 src/http.js     路由的 JSON 收发与连接准入
 src/client.js   设置页（`settings.section`）与样式
-tests/          store/tools 的行为测试
+tests/          行为测试（node --test）与页面验收脚本（Playwright）
 docs/           设计文档与 ADR（文档先行）
 ```
 
@@ -53,7 +53,11 @@ Host 侧改动需重启 Host；只有客户端（`lib/client.js`）改动时刷�
 
 已完成：配置层（归一化 + 校验 + 单测）、查询工具的 schema/描述/dispatch、按预设置装、折叠与展开、聚合组代执行、晚注册补折叠、设置页（可折叠的组面板、带来源分类与原始 JSON 结构的工具选择、预设白名单、形态与闲置收回、页脚内联的保存结果、校验错误回显）、构建与镜像脚本。
 
-设置页的验收脚本：`python tests/verify_page.py "<带 token 的界面地址>"`，它打开设置页→工具折叠，断言面板折叠/展开、面板间距、无"新组的默认值"、工具详情里"描述"与"原始 JSON 结构"各自折叠，并检查保存结果是否出现在页脚按钮旁。
+页面验收脚本（Playwright，对真 Host 跑，命令见 `docs/design.md`「本地验收」）：
+
+- `tests/verify_page.py`：面板折叠/展开、面板间距、无"新组的默认值"、工具详情里"描述"与"原始 JSON 结构"各自折叠。
+- `tests/verify_save.py`：新增组→勾工具→保存，读页脚内联的保存结果。
+- `tests/probe_details.py`：读一个工具详情的来源、层、描述与原始 JSON 结构。
 
 尚未完成，按设计文档推进：
 

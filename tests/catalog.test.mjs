@@ -6,14 +6,39 @@ import { en, originLabel, zh } from '../src/client.js'
 
 /** A registry whose global layer and captured assemblies answer with fixed schemas. */
 function registryWith({ global = [], scoped = [] } = {}) {
+  const registrations = []
   const ctx = {
     tools: {
       schemas: scope => (scope === undefined ? global : scoped),
-      register: () => () => {},
+      register: definition => {
+        registrations.push(definition.name)
+        return () => registrations.splice(registrations.indexOf(definition.name), 1)
+      },
       restrict: () => () => {},
+      execute: async () => ({ content: [], isError: false }),
     },
   }
-  return new SessionRegistry({ ctx, log: {}, readConfig: () => ({}) })
+  const registry = new SessionRegistry({ ctx, log: {}, readConfig: () => ({ groups: [] }) })
+  registry.registrations = registrations
+  return registry
+}
+
+/** One agent whose context registers tools through the same stub. */
+function agentOf(registry) {
+  return {
+    ctx: {
+      tools: registry.ctx.tools,
+      effect: () => {},
+    },
+  }
+}
+
+/** One configuration with a single fold group named `name`. */
+function oneGroup(name) {
+  return {
+    version: 1,
+    groups: [{ id: 'g1', name, kind: 'fold', tools: ['bash'], presets: ['standard'], listingForm: 'list', idleRetract: { enabled: false, rounds: 5 }, usageNote: '' }],
+  }
 }
 
 /** One tool schema as the registry publishes it. */
@@ -60,4 +85,29 @@ test('the picker classifies an MCP tool even when the Host omits the source fiel
   assert.equal(originLabel(legacy, lookup(en)), 'MCP server: github')
   assert.equal(originLabel({ name: 'bash' }, lookup(zh)), '内置或插件工具')
   assert.equal(originLabel({ name: 'bash', origin: 'tool', server: 'x' }, lookup(zh)), '内置或插件工具')
+})
+
+test('a query tool the plugin registered itself is not offered back as a bindable tool', () => {
+  const registry = registryWith({ global: [schema('bash')], scoped: [schema('bash'), schema('ov')] })
+  registry.capture({}, registry.ctx.tools.schemas({}))
+  registry.readConfig = () => oneGroup('ov')
+  registry.install(agentOf(registry), 'standard')
+  assert.deepEqual(registry.catalog().map(entry => entry.name), ['bash'])
+})
+
+test('a real tool keeps its name even when a group wants to use it', () => {
+  const registry = registryWith({ global: [schema('ov'), schema('bash')] })
+  assert.deepEqual(registry.catalog().map(entry => entry.name), ['bash', 'ov'])
+})
+
+test('renaming a group re-registers its query tool under the new name', () => {
+  const registry = registryWith({ global: [schema('bash')] })
+  const agent = agentOf(registry)
+  registry.readConfig = () => oneGroup('ov')
+  registry.install(agent, 'standard')
+  assert.deepEqual(registry.registrations, ['ov'])
+  registry.readConfig = () => oneGroup('ov_tools')
+  registry.refresh(oneGroup('ov_tools'))
+  assert.deepEqual(registry.registrations, ['ov_tools'])
+  assert.deepEqual([...registry.sessions.get(agent).registered], ['ov_tools'])
 })
