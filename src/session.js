@@ -213,21 +213,35 @@ export class SessionRegistry {
 
   /**
    * The catalog the settings page offers.
-   * Names come from the global layer plus every captured assembly; descriptions are absent for
-   * tools folded out before their first capture (expanding one teaches the plugin its description).
+   * Each row carries what the page shows: the tool's own description, its raw parameter schema,
+   * the protocol origin (`mcp__<server>__<tool>` names come from an MCP server), and whether the
+   * assembler saw it in the global layer or only inside a preset scope. Descriptions and schemas
+   * are absent for tools folded out before their first capture (expanding one teaches them).
    */
   catalog() {
-    const schemas = this.knownSchemas()
-    const bound = new Set()
-    for (const record of this.sessions.values()) {
-      for (const state of record.groups.values()) {
-        for (const tool of state.group.tools) bound.add(tool)
+    const globalSchemas = new Map()
+    for (const schema of this.ctx.tools.schemas()) globalSchemas.set(schema.name, schema)
+    const presetSchemas = new Map()
+    for (const catalog of this.catalogByScope.values()) {
+      for (const [name, schema] of catalog) {
+        if (globalSchemas.has(name) || presetSchemas.has(name)) continue
+        presetSchemas.set(name, schema)
       }
     }
-    return [...schemas.values()]
-      .map(schema => ({ name: schema.name, description: schema.description ?? '' }))
-      .filter(entry => entry.name !== 'run_code')
-      .sort((left, right) => left.name.localeCompare(right.name))
+    const entries = []
+    for (const [name, schema] of [...globalSchemas, ...presetSchemas]) {
+      if (name === 'run_code') continue
+      const server = mcpServerOf(name)
+      entries.push({
+        name,
+        description: schema?.description ?? '',
+        parameters: schema?.parameters,
+        origin: server === undefined ? 'tool' : 'mcp',
+        server,
+        layer: globalSchemas.has(name) ? 'global' : 'preset',
+      })
+    }
+    return entries.sort((left, right) => left.name.localeCompare(right.name))
   }
 
   /** The per-session runtime one query tool dispatches through. */
@@ -361,9 +375,20 @@ export class SessionRegistry {
   }
 }
 
+/**
+ * The MCP server name an MCP tool name carries.
+ * The client publishes MCP tools as `mcp__<server>__<tool>`, so anything else is a plugin or
+ * built-in tool without a server.
+ * @param name - the registered tool name.
+ * @returns the server name, or undefined when the name is not an MCP tool name.
+ */
+function mcpServerOf(name) {
+  const match = /^mcp__(.+?)__/.exec(name)
+  return match === null ? undefined : match[1]
+}
+
 /** Join a tool result's text blocks, falling back to its structured value. */
-function textOf(outcome) {
-  const blocks = Array.isArray(outcome?.content) ? outcome.content : []
+function textOf(outcome) {  const blocks = Array.isArray(outcome?.content) ? outcome.content : []
   const text = blocks
     .map(block => (block?.type === 'text' ? String(block.text ?? '') : `[${String(block?.type ?? 'block')}]`))
     .join('\n')

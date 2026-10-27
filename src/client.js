@@ -13,7 +13,6 @@ export const en = {
   saving: 'Saving…',
   reload: 'Reload',
   saved: 'Saved.',
-  defaults: 'Defaults for new groups',
   listingForm: 'Query form',
   formList: 'List tool names',
   formSearch: 'Summary with search',
@@ -49,6 +48,18 @@ export const en = {
   saveFailed: 'Could not save the configuration',
   bound: 'bound',
   noDescription: 'no description recorded yet',
+  expandPanel: 'Expand',
+  collapsePanel: 'Collapse',
+  toolDetails: 'Details',
+  hideDetails: 'Hide details',
+  source: 'Source',
+  originMcp: 'MCP server',
+  originTool: 'Built-in or plugin tool',
+  layerGlobal: 'global layer',
+  layerPreset: 'preset scope',
+  description: 'Description',
+  rawSchema: 'Raw JSON schema',
+  noSchema: 'No parameter schema recorded yet',
 }
 
 /** Simplified Chinese copy. */
@@ -61,7 +72,6 @@ export const zh = {
   saving: '保存中…',
   reload: '重新读取',
   saved: '已保存。',
-  defaults: '新组的默认值',
   listingForm: '查询形态',
   formList: '列举工具名',
   formSearch: '概括加搜索',
@@ -97,6 +107,18 @@ export const zh = {
   saveFailed: '保存配置失败',
   bound: '已绑定',
   noDescription: '尚无描述记录',
+  expandPanel: '展开',
+  collapsePanel: '收起',
+  toolDetails: '详情',
+  hideDetails: '收起详情',
+  source: '来源',
+  originMcp: 'MCP 服务器',
+  originTool: '内置或插件工具',
+  layerGlobal: '全局层',
+  layerPreset: '预设作用域',
+  description: '描述',
+  rawSchema: '原始 JSON 结构',
+  noSchema: '尚无参数结构记录',
 }
 
 /** New group id; ids are local and never reach the model. */
@@ -205,15 +227,15 @@ function ToolFoldSection(props) {
   const [state, setState] = React.useState(null)
   const [draft, setDraft] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNotice] = React.useState(null)
 
   const adopt = (next) => {
     setState(next)
     setDraft(next.config)
-    setNotice('')
+    setNotice(null)
   }
 
-  const fail = (error) => setNotice(`${error?.message ?? String(error)}`)
+  const fail = (error) => setNotice({ tone: 'error', text: `${error?.message ?? String(error)}` })
 
   const reload = () => {
     requestJson('/tool-fold/state').then(adopt).catch(error => fail(new Error(`${t('loadFailed')}: ${error.message}`)))
@@ -224,14 +246,13 @@ function ToolFoldSection(props) {
   if (draft === null) {
     return React.createElement('div', { className: 'tf-page' },
       React.createElement('h2', { className: 'tf-title' }, t('title')),
-      React.createElement('p', { className: 'tf-muted' }, notice === '' ? t('intro') : notice))
+      React.createElement('p', { className: 'tf-muted' }, notice === null ? t('intro') : notice.text))
   }
 
   const update = (patch) => setDraft(current => ({ ...current, ...patch }))
   const updateGroup = (id, patch) => update({
     groups: draft.groups.map(group => (group.id === id ? { ...group, ...patch } : group)),
   })
-  const updateDefaults = (patch) => update({ defaults: { ...draft.defaults, ...patch } })
 
   const save = () => {
     setBusy(true)
@@ -241,8 +262,11 @@ function ToolFoldSection(props) {
       body: JSON.stringify(draft),
     }).then((next) => {
       adopt(next)
-      setNotice(t('saved'))
-    }).catch(error => fail(new Error(`${t('saveFailed')}: ${error.message}`)))
+      setNotice({ tone: 'ok', text: t('saved') })
+    }).catch(error => setNotice({
+      tone: 'error',
+      text: `${t('saveFailed')}: ${error.message}`,
+    }))
       .finally(() => setBusy(false))
   }
 
@@ -250,19 +274,9 @@ function ToolFoldSection(props) {
     React.createElement('h2', { className: 'tf-title' }, t('title')),
     React.createElement('p', { className: 'tf-muted' }, t('intro')),
     React.createElement('p', { className: 'tf-muted' }, `${t('path')}: ${state?.path ?? ''}`),
-    notice === '' ? null : React.createElement('p', { className: 'tf-notice' }, notice),
     problemsOf(state, t),
 
-    React.createElement('section', { className: 'tf-defaults' },
-      React.createElement('h3', null, t('defaults')),
-      React.createElement('label', { className: 'tf-field' },
-        React.createElement('span', null, t('listingForm')),
-        select(draft.defaults.listingForm, [
-          ['list', t('formList')],
-          ['search', t('formSearch')],
-        ], value => updateDefaults({ listingForm: value })))),
-
-    React.createElement('section', null,
+    React.createElement('section', { className: 'tf-groups' },
       React.createElement('h3', null, t('groups')),
       draft.groups.length === 0
         ? React.createElement('p', { className: 'tf-muted' }, t('empty'))
@@ -286,7 +300,7 @@ function ToolFoldSection(props) {
           onClick: () => update({ groups: [...draft.groups, newGroup('aggregate', draft.defaults)] }),
         }, t('addAggregate')))),
 
-    React.createElement('div', { className: 'tf-actions tf-footer' },
+    React.createElement('div', { className: 'tf-footer' },
       React.createElement('button', {
         type: 'button',
         className: 'tf-button tf-primary',
@@ -298,7 +312,11 @@ function ToolFoldSection(props) {
         className: 'tf-button',
         disabled: busy,
         onClick: reload,
-      }, t('reload'))))
+      }, t('reload')),
+      notice === null ? null : React.createElement('span', {
+        className: notice.tone === 'ok' ? 'tf-saved' : 'tf-save-error',
+        role: 'status',
+      }, notice.text)))
 }
 
 /** One group card. */
@@ -335,10 +353,29 @@ function GroupCard(props) {
     setManual('')
   }
 
-  return React.createElement('article', { className: 'tf-card' },
+  const summary = [
+    fold ? t('kindFold') : t('kindAggregate'),
+    `${group.tools.length} ${t('tools')}`,
+    `${group.presets.length} ${t('presets')}`,
+  ].join(' · ')
+  const [open, setOpen] = React.useState(group.name === '')
+  const [openTool, setOpenTool] = React.useState('')
+
+  return React.createElement('article', { className: open ? 'tf-card tf-card-open' : 'tf-card' },
     React.createElement('header', { className: 'tf-card-head' },
-      React.createElement('strong', null, group.name === '' ? t('name') : group.name),
+      React.createElement('button', {
+        type: 'button',
+        className: 'tf-disclosure',
+        'aria-expanded': open ? 'true' : 'false',
+        'aria-label': `${open ? t('collapsePanel') : t('expandPanel')}: ${group.name === '' ? t('name') : group.name}`,
+        title: open ? t('collapsePanel') : t('expandPanel'),
+        onClick: () => setOpen(current => !current),
+      }, open ? '▾' : '▸'),
+      React.createElement('strong', { className: 'tf-card-title' }, group.name === '' ? t('name') : group.name),
+      React.createElement('small', { className: 'tf-card-summary' }, summary),
       React.createElement('button', { type: 'button', className: 'tf-link', onClick: onRemove }, t('remove'))),
+
+    open ? React.createElement('div', { className: 'tf-card-body' },
 
     React.createElement('label', { className: 'tf-field' },
       React.createElement('span', null, t('name')),
@@ -385,19 +422,47 @@ function GroupCard(props) {
         : entries.map(entry => {
           const owned = boundElsewhere.get(entry.name)
           const checked = group.tools.includes(entry.name)
-          return React.createElement('label', {
+          const details = openTool === entry.name
+          const detailsLabel = details ? t('hideDetails') : t('toolDetails')
+          return React.createElement('div', {
             key: entry.name,
-            className: owned === undefined ? 'tf-tool' : 'tf-tool tf-tool-taken',
-            title: entry.description,
+            className: details ? 'tf-tool tf-tool-detailed' : 'tf-tool',
           },
-          React.createElement('input', {
-            type: 'checkbox',
-            checked,
-            disabled: owned !== undefined && !checked,
-            onChange: () => toggleTool(entry.name),
-          }),
-          React.createElement('span', null, entry.name),
-          owned === undefined ? null : React.createElement('small', null, `${t('bound')}: ${owned}`))
+          React.createElement('div', { className: 'tf-tool-row' },
+            React.createElement('label', {
+              className: owned === undefined ? 'tf-tool-label' : 'tf-tool-label tf-tool-taken',
+              title: entry.description,
+            },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked,
+              disabled: owned !== undefined && !checked,
+              onChange: () => toggleTool(entry.name),
+            }),
+            React.createElement('span', { className: 'tf-tool-name' }, entry.name)),
+            React.createElement('span', { className: 'tf-tool-origin' }, originLabel(entry, t)),
+            owned === undefined ? null : React.createElement('small', { className: 'tf-tool-owned' }, `${t('bound')}: ${owned}`),
+            React.createElement('button', {
+              type: 'button',
+              className: 'tf-tool-info',
+              'aria-expanded': details ? 'true' : 'false',
+              'aria-label': `${detailsLabel}: ${entry.name}`,
+              onClick: () => setOpenTool(details ? '' : entry.name),
+            }, detailsLabel)),
+          details ? React.createElement('div', { className: 'tf-tool-details' },
+            React.createElement('div', { className: 'tf-tool-meta' },
+              React.createElement('span', null, `${t('source')}: ${originLabel(entry, t)}`),
+              entry.layer === undefined ? null : React.createElement('span', null,
+                entry.layer === 'global' ? t('layerGlobal') : t('layerPreset'))),
+            React.createElement('details', { className: 'tf-details' },
+              React.createElement('summary', null, t('description')),
+              React.createElement('p', { className: 'tf-tool-description' },
+                entry.description === '' ? t('noDescription') : entry.description)),
+            React.createElement('details', { className: 'tf-details' },
+              React.createElement('summary', null, t('rawSchema')),
+              entry.parameters === undefined
+                ? React.createElement('p', { className: 'tf-muted' }, t('noSchema'))
+                : React.createElement('pre', { className: 'tf-schema' }, JSON.stringify(entry.parameters, null, 2)))) : null)
         })),
       React.createElement('div', { className: 'tf-inline' },
         React.createElement('input', {
@@ -442,7 +507,22 @@ function GroupCard(props) {
           value: group.usageNote,
           onChange: event => onChange({ usageNote: event.target.value }),
         }),
-        React.createElement('small', { className: 'tf-muted' }, t('usageNoteHint'))))
+        React.createElement('small', { className: 'tf-muted' }, t('usageNoteHint'))
+    )) : null)
+}
+
+/**
+ * The source label one catalog entry shows in the picker.
+ * Falls back to the name's own `mcp__<server>__` prefix so a page served by a Host that predates
+ * the source fields still classifies MCP tools correctly.
+ * @param entry - one catalog row from the Host snapshot.
+ * @param t - active copy lookup.
+ * @returns the MCP server name when the tool came from one, otherwise the generic origin label.
+ */
+export function originLabel(entry, t) {
+  const server = entry.server ?? /^mcp__(.+?)__/.exec(entry.name)?.[1]
+  if (entry.origin === 'tool' || server === undefined) return t('originTool')
+  return `${t('originMcp')}: ${server}`
 }
 
 /** Tool name to the group id that already owns it, excluding `currentId`. */

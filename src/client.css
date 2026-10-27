@@ -21,16 +21,6 @@
   opacity: 0.72;
 }
 
-.tf-notice {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(127, 127, 127, 0.14);
-  white-space: pre-wrap;
-}
-
 .tf-problems {
   font-size: 12px;
   line-height: 1.5;
@@ -44,21 +34,23 @@
   padding-left: 18px;
 }
 
-.tf-defaults,
-.tf-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tf-defaults h3,
 .tf-page h3 {
   margin: 6px 0 0;
   font-size: 13px;
   font-weight: 600;
 }
 
+/* Group panels: one column, spaced, each collapsible from its header. */
+.tf-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .tf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   border: 1px solid rgba(127, 127, 127, 0.28);
   border-radius: 10px;
   padding: 10px 12px;
@@ -67,8 +59,48 @@
 .tf-card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
+}
+
+.tf-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-card-summary {
+  flex: 1;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.tf-disclosure {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid rgba(127, 127, 127, 0.32);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tf-disclosure:hover {
+  background: rgba(127, 127, 127, 0.14);
 }
 
 .tf-field {
@@ -144,11 +176,12 @@ body[data-ds-dark-theme] .tf-field select {
   cursor: pointer;
 }
 
+/* Tool picker: one row per tool, each row can open its own details panel. */
 .tf-tools {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 2px 8px;
-  max-height: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 260px;
   overflow: auto;
   padding: 4px;
   border-radius: 6px;
@@ -156,15 +189,48 @@ body[data-ds-dark-theme] .tf-field select {
 }
 
 .tf-tool {
+  border-radius: 5px;
+}
+
+.tf-tool-detailed {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.tf-tool-row {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.tf-tool-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   cursor: pointer;
 }
 
-.tf-tool small {
+.tf-tool-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-tool-origin {
+  flex: none;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 127, 127, 0.28);
+  opacity: 0.75;
+}
+
+.tf-tool-owned {
+  flex: none;
   font-family: inherit;
   opacity: 0.6;
 }
@@ -172,6 +238,66 @@ body[data-ds-dark-theme] .tf-field select {
 .tf-tool-taken {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.tf-tool-info {
+  flex: none;
+  font: inherit;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+}
+
+.tf-tool-info:hover {
+  opacity: 1;
+}
+
+.tf-tool-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 8px 24px;
+  font-family: system-ui, sans-serif;
+}
+
+.tf-tool-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  opacity: 0.78;
+}
+
+.tf-details > summary {
+  font-size: 11px;
+  opacity: 0.82;
+  cursor: pointer;
+}
+
+.tf-tool-description {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  opacity: 0.86;
+}
+
+.tf-schema {
+  margin: 4px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  background: rgba(127, 127, 127, 0.06);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .tf-bound {
@@ -222,8 +348,33 @@ body[data-ds-dark-theme] .tf-field select {
   gap: 8px;
 }
 
+/* Save row: the outcome sits beside the buttons, not above the page. */
 .tf-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   padding-top: 4px;
+}
+
+.tf-saved {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f9254;
+}
+
+body[data-ds-dark-theme] .tf-saved {
+  color: #5ddb92;
+}
+
+.tf-save-error {
+  font-size: 12px;
+  color: #c2413f;
+  white-space: pre-wrap;
+}
+
+body[data-ds-dark-theme] .tf-save-error {
+  color: #f08b8a;
 }
 
 .tf-button {
