@@ -1,10 +1,24 @@
 # dsh-tool-fold
 
-Fold a batch of registered tools into one query tool: the model reveals them only when it needs them, or hands them to an aggregate group that calls them on its behalf. Folding is scoped to **agent presets**, so the same batch can disappear in one preset's sessions and stay visible in another.
+For humans:
 
-A loaded profile easily grows to dozens or hundreds of tools, each spending context on its description and parameter schema. This plugin removes a chosen batch — MCP tools included — from the model's tool list and leaves one thin query tool behind.
+Do you keep loading plugins into DeepSeek Harness, registering one MCP server after another? If you also run [dsh-context](https://github.com/bowenliang123/dsh-context#readme) and watch the tool-definition cost of your sessions outside the minimal preset, it looks like this:
 
-![Settings page: fold group, tool provenance, unsaved-changes indicator](docs/screenshot.png)
+![Probably on the low end already](docs/工具定义截图.png)
+
+Dozens or hundreds of tools, each spending context on its own description and parameter schema — a single "hello" can burn 50k+ tokens before the reply starts.
+
+This plugin lets you pick a batch to remove from the tool list — ideally the ones you rarely use — and leaves one thin query tool behind. Folded tools come back only when the model asks for them, or are proxied by an aggregate group. Folding is scoped to **agent presets**, so the same batch can disappear in one preset's sessions and stay visible in another.
+
+![Folding a batch](docs/工具移除截图.png)
+
+![Context trend after folding](docs/工具上下文趋势.png)
+
+With the OpenViking MCP server as an example: I keep only the `read` tool visible and fold the rest into one aggregate group.
+
+That is the whole idea. [CONTEXT](CONTEXT.md) has the vocabulary, and the sections below have the mechanics. Contributions welcome.
+
+---
 
 ## Two kinds of group
 
@@ -26,6 +40,8 @@ dsh plugin --profile web add github:Sodapopper-pixel/dsh-tool-fold
 Restart the Host once after installing — this is a Host-side plugin and it loads at startup — then open **Settings → Tool fold**.
 
 ## Configure
+
+![Configuration page](docs/screenshot.png)
 
 On the settings page: add a fold or aggregate group → name the query tool → pick its query form (list tool names, or a summary with search) → check the agent presets it applies to → check the tools to fold → save.
 
