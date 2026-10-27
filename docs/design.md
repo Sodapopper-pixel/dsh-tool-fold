@@ -45,7 +45,7 @@
 **工具清单的来源（第三方插件的边界）。** `restrict` 必须用 scoped ctx，但 `ToolRuntime.schemas(scope?)` 的 scope 由入参决定，插件拿不到 `ScopeKey`（`scopeOf()` 属于 `@deepseek-ai/dsh-scope`，未安装进 profile），于是无法直接枚举某个会话可见的预设作用域工具。实现用两条通道绕开：
 
 1. **名字集合**：`agent.ctx.tools.restrict({ deny: ['<哨兵>'] })` 的拒绝消息会列出该作用域可限制的全部名字（`packages/core/tools/src/index.ts:1125`，`known global tools: a, b, c`）。抛错发生在追加限制之前，所以探测不改变状态；解析这条消息即得到"迟到绑定"判定所需的名单。
-2. **描述与参数**：注册一个 `ctx.systemPrompt.tools(provider)` 全局 provider，装配时它收到 `AssembleContext.scope`（`packages/core/system-prompt/src/index.ts:42`），据此调 `ctx.tools.schemas(context.scope)` 缓存该作用域的工具表。provider 返回 `undefined`，不贡献任何 schema。
+2. **描述与参数**：注册一个 `ctx.systemPrompt.tools(provider)` 全局 provider，装配时它收到 `AssembleContext.scope`（`packages/core/system-prompt/src/index.ts:42`），据此调 `ctx.tools.schemas(context.scope)` 缓存该作用域的工具表。provider 必须返回 `{ schemas: [] }` 这个空 surface——装配对每个 provider 无条件读 `result.schemas`（同文件 `:641`），返回 `undefined` 会让每一轮 prompt 装配抛 `Cannot read properties of undefined (reading 'schemas')`。本插件只观察 scope，不贡献 schema。
 
 代价：会话首次装配之前被折叠的工具没有描述缓存，`find` 会显示"尚无描述记录"，展开一次后自动补齐。页面选择器同理——预设作用域里的工具在缓存之前只能手动输入名字。
 
