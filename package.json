@@ -25,6 +25,17 @@
     "url": "https://github.com/Sodapopper-pixel/dsh-tool-fold/issues"
   },
   "main": "lib/index.js",
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
