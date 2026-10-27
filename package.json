@@ -1,7 +1,7 @@
 {
   "name": "dsh-tool-fold",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "icon": "./icon.svg",
   "description": "把一批已注册工具折叠成一个查询工具：需要时展开直调，或交给聚合组代执行。Fold registered tools out of the model-visible surface and reveal or proxy them on demand.",
@@ -16,6 +16,14 @@
   ],
   "license": "MIT",
   "author": "Sodapopper-pixel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sodapopper-pixel/dsh-tool-fold.git"
+  },
+  "homepage": "https://github.com/Sodapopper-pixel/dsh-tool-fold#readme",
+  "bugs": {
+    "url": "https://github.com/Sodapopper-pixel/dsh-tool-fold/issues"
+  },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -31,6 +39,9 @@
     "scripts",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
+    "CONTEXT.md",
+    "docs/screenshot.png",
     "LICENSE"
   ],
   "scripts": {

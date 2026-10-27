@@ -159,8 +159,14 @@ export function apply(ctx) {
     registry.reconcile()
   }), 'tool-fold: tools/change')
 
+  ctx.effect(() => ctx.on('agent/disposed', ({ agent }) => {
+    registry.forget(agent)
+  }), 'tool-fold: agent/disposed')
+
+  // Registrations and restrictions live on each agent's own context, which outlives this
+  // plugin's fiber, so unloading must undo them explicitly instead of dropping the records.
   ctx.effect(() => () => {
-    registry.sessions.clear()
+    registry.dispose()
   }, 'tool-fold: release session records')
 
   ctx.effect(() => ctx.webServer.register({

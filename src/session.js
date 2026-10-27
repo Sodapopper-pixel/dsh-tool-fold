@@ -68,6 +68,18 @@ export class SessionRegistry {
   }
 
   /**
+   * Release every live session: reveal what each group folded and unregister its query tool.
+   * Registrations and restrictions live on the agent's own context, which outlives this
+   * plugin's fiber, so unloading the plugin must undo them here.
+   */
+  dispose() {
+    for (const record of this.sessions.values()) {
+      for (const id of [...record.groups.keys()]) this.releaseGroup(record, id)
+    }
+    this.sessions.clear()
+  }
+
+  /**
    * Install the groups that apply to one newly created agent session.
    * @param agent - the agent whose session was just created.
    * @param presetId - the composed preset id, if the harness named one.
@@ -82,6 +94,7 @@ export class SessionRegistry {
       ownNames: new Set(),
       registered: new Set(),
       available: new Set(),
+      proxying: 0,
       groups: new Map(),
     }
     this.sessions.set(agent, record)
@@ -140,7 +153,7 @@ export class SessionRegistry {
    */
   refreshBindings(record) {
     if (record.agent.ctx === undefined) return
-    const names = this.restrictable(record.agent)
+    const names = this.restrictable(record)
     record.available = names
     for (const state of record.groups.values()) {
       const bound = new Set(state.group.tools)
@@ -161,17 +174,27 @@ export class SessionRegistry {
   /**
    * The names this agent's scope may restrict: its inherited surface before our own folding.
    * The registry validates `restrict` names against exactly this set and lists them in its
-   * rejection message, which is the only enumeration a third-party plugin can reach.
+   * rejection message, which is the only enumeration a third-party plugin can reach. A Host
+   * that words that rejection differently leaves us with no names, so say so loudly instead of
+   * silently unfolding everything.
+   * @param record - the session whose agent scope is probed.
+   * @returns the restrictable names; empty when the Host's rejection could not be read.
    */
-  restrictable(agent) {
+  restrictable(record) {
     try {
-      const off = agent.ctx.tools.restrict({ deny: [SENTINEL] })
+      const off = record.agent.ctx.tools.restrict({ deny: [SENTINEL] })
       // A tool genuinely named like the sentinel: nothing to learn, and the probe must not fold it.
       off()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const match = KNOWN_TOOLS.exec(message)
-      if (match === null) return new Set()
+      if (match === null) {
+        if (!record.enumerationWarned) {
+          record.enumerationWarned = true
+          this.log.warn?.(`tool-fold: cannot read the restrictable tool list from this Host; folding is inactive for this session (expected a "; known global tools: ..." clause): ${message}`)
+        }
+        return new Set()
+      }
       const names = match[1].trim()
       if (names === '(none)' || names === '') return new Set()
       return new Set(names.split(',').map(name => name.trim()))
@@ -216,12 +239,17 @@ export class SessionRegistry {
   reconcile() {
     if (this.busy) return
     for (const record of this.sessions.values()) {
+      // A forwarded call reveals its target for the length of that call; re-folding now would
+      // deny it again mid-flight and turn the proxy result into `UNKNOWN_TOOL`.
+      if (record.proxying > 0) continue
       this.mutating(() => this.refreshBindings(record))
     }
   }
 
   /** Drop a session record; the agent's own context disposes the registrations and restrictions. */
   forget(agent) {
+    const record = this.sessions.get(agent)
+    if (record !== undefined) this.liftAll(record)
     this.sessions.delete(agent)
   }
 
@@ -401,9 +429,13 @@ export class SessionRegistry {
 
   /**
    * `op=call`: run one bound tool through the registry on the model's behalf.
-   * The call carries this tool's execution token as `parent`, so it is a legal
-   * sub-dispatch and the target's pre-execute handlers, guards and post-execute
-   * steps all run.
+   *
+   * The bound tool is folded by this plugin, and the registry resolves an execution against
+   * the same agent view it folds, so a folded name would report `UNKNOWN_TOOL`. The name is
+   * therefore revealed for exactly the duration of the forwarded call and folded again after,
+   * whether the call succeeded or threw. The call also carries this tool's execution token as
+   * `parent`, so it is a legal sub-dispatch and the target's pre-execute handlers, guards and
+   * post-execute steps all run.
    */
   async call(record, state, name, args, exec) {
     if (!state.group.tools.includes(name)) {
@@ -420,12 +452,20 @@ export class SessionRegistry {
       parent: exec.token,
       signal: exec.signal,
     }
-    const outcome = await record.agent.ctx.tools.execute(input)
-    const text = textOf(outcome)
-    if (outcome.isError) {
-      return `Failed: ${text}`
+    const wasFolded = state.folded.delete(name)
+    if (wasFolded) this.mutating(() => this.apply(record))
+    record.proxying += 1
+    try {
+      const outcome = await record.agent.ctx.tools.execute(input)
+      const text = textOf(outcome)
+      return outcome.isError ? `Failed: ${text}` : text
+    } finally {
+      record.proxying -= 1
+      if (wasFolded) {
+        if (record.available.has(name)) state.folded.add(name)
+        this.mutating(() => this.apply(record))
+      }
     }
-    return text
   }
 }
 

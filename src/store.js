@@ -14,9 +14,11 @@ export const DEFAULT_ROUNDS = 5
 
 /** A query tool name is a tool name: letters, digits and underscores, not starting with a digit. */
 const GROUP_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,47}$/
-
 /** Tool name the harness reserves for the PTC presentation transport. */
 const RESERVED_NAME = 'run_code'
+
+/** Longest usage note allowed: it is pasted into a model-visible tool description on every request. */
+const USAGE_NOTE_LIMIT = 2000
 
 /**
  * A configuration with no groups.
@@ -102,8 +104,16 @@ export function validateConfig(config, context) {
   const presetIds = context?.presetIds ?? new Set()
   const problems = []
   const seenNames = new Map()
+  const seenIds = new Set()
   const boundBy = new Map()
   for (const group of config.groups) {
+    if (group.id !== '' && seenIds.has(group.id)) {
+      problems.push({ code: 'id-duplicate', groupId: group.id, message: `Two groups share the id "${group.id}"; one of them was probably duplicated in the file. Re-save from the settings page to regenerate it.` })
+    }
+    if (group.id !== '') seenIds.add(group.id)
+    if (group.usageNote.length > USAGE_NOTE_LIMIT) {
+      problems.push({ code: 'usage-note-too-long', groupId: group.id, message: `The usage note is ${group.usageNote.length} characters; keep it under ${USAGE_NOTE_LIMIT} so it does not inflate every request's tool description.` })
+    }
     const name = group.name
     const where = name === '' ? '(unnamed group)' : name
     if (name === '') {

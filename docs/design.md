@@ -151,3 +151,14 @@ config:
 Host 侧改动（例如 `catalog()` 的字段、保存校验）不在客户端 bundle 里，必须重启 Host 才生效。会话中途不能自己重启 Host——本会话的 shell 是 Host 的后代进程，杀 Host 会连会话一起结束；重启交给用户（`dsh-web-stop.bat` 再 `dsh-web.bat`）。
 
 不想动真 Host 的配置时，可以另起一个隔离 `DSH_HOME`：`dsh plugin --profile web add "file:<本仓库>"`，再 `dsh web --no-open --port 3091`（默认 3080 被真 Host 占着）。隔离实例的目录里留过一份：`C:\Users\21621\dsh-backups\tool-fold-verify-home`。
+## 代执行为什么要"临时放开"
+
+聚合组的 `call` 一开始是直接转发的：`record.agent.ctx.tools.execute({ name, agent, parent })`。它必然失败——宿主的执行入口在 `packages/core/tools/src/index.ts` 里第一件事就是 `const visible = this.get(name, agent)`，用的是**同一个被折叠过的会话视图**，于是刚被 deny 的工具在执行阶段被判定为 `UNKNOWN_TOOL`，模型看到的是 `Error: unknown tool "..."`。
+
+修法是让"折叠"和"转发"不重叠：转发前把该工具从这一组的 folded 集合里摘掉并重算限制（`apply()`），转发结束（无论成功还是抛错）在 `finally` 里放回并重算。期间 `record.proxying` 计数让 `reconcile()` 跳过这个会话——否则一次 `tools/change` 回声会把工具重新 deny 掉，正在飞的调用又变成 unknown tool。
+
+这条语义只影响本会话的作用域，宿主的全局工具表不动，所以其他会话看不到任何中间态。回归测试在 `tests/session-call.test.mjs`，用一个按宿主语义实现限制与执行的假 registry 覆盖"转发成功""转发抛错""未注册时拒绝""dispose 还原"四种情况。
+
+## 生命周期：谁负责撤销
+
+工具注册与限制都挂在 **agent 自己的 ctx** 上，活过插件 fiber。所以插件卸载时不能只清空记录表：`dispose()` 逐个 `releaseGroup()`（放回被折叠的工具、注销查询工具）再清表；`agent/disposed` 也接到 `forget()` 上，让结束的会话不再被 `tools/change` 回放（旧实现里 `forget` 是死代码）。
