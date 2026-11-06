@@ -16,10 +16,15 @@ function host({ tools = [BOUND, 'bash'] } = {}) {
   const denied = new Set()
   const calls = []
   const visibleNames = () => [...globalNames, ...own].filter(name => !denied.has(name))
+  const definitions = new Map()
   const api = {
     register(definition) {
       own.add(definition.name)
-      return () => own.delete(definition.name)
+      definitions.set(definition.name, definition)
+      return () => {
+        own.delete(definition.name)
+        definitions.delete(definition.name)
+      }
     },
     restrict(filter) {
       const deny = [...(filter?.deny ?? [])]
@@ -45,7 +50,20 @@ function host({ tools = [BOUND, 'bash'] } = {}) {
       return { content: [{ type: 'text', text: `ok:${input.name}` }], isError: false }
     },
   }
-  return { api, calls, own, visibleNames }
+  return {
+    api,
+    calls,
+    own,
+    definitions,
+    visibleNames,
+    remove(name) {
+      const index = globalNames.indexOf(name)
+      if (index >= 0) globalNames.splice(index, 1)
+    },
+    add(name) {
+      if (!globalNames.includes(name)) globalNames.push(name)
+    },
+  }
 }
 
 /** One aggregate group over `tools`, scoped to the standard preset. */
@@ -121,4 +139,51 @@ test('forget lifts a session but leaves other sessions folded', () => {
   assert.equal(registry.sessions.size, 0)
   assert.equal(world.visibleNames().includes(BOUND), true)
   assert.equal(record.proxying, 0)
+})
+
+test('a bound tool whose plugin is uninstalled drops out of the description', () => {
+  const { world, registry } = installed()
+  assert.match(world.definitions.get('memory').description, /mcp__openviking__read/)
+  world.remove(BOUND)
+  registry.reconcile()
+  const description = world.definitions.get('memory').description
+  assert.doesNotMatch(description, /Bound tools: mcp__openviking__read/)
+  assert.match(description, /Bound but not registered in this session right now: mcp__openviking__read/)
+  assert.match(description, /folded batch of 0 tool/)
+})
+
+test('a reinstalled tool is folded again and returns to the description', () => {
+  const { world, registry, record, state } = installed()
+  world.remove(BOUND)
+  registry.reconcile()
+  assert.equal(state.folded.size, 0)
+  world.add(BOUND)
+  registry.reconcile()
+  assert.equal(world.visibleNames().includes(BOUND), false, 'the returning tool is folded again')
+  assert.match(world.definitions.get('memory').description, /Bound tools: mcp__openviking__read/)
+  assert.equal(record.available.has(BOUND), true)
+})
+
+test('a missing binding is reported by op=list instead of promised', () => {
+  const { world, registry, record, state } = installed()
+  world.remove(BOUND)
+  registry.reconcile()
+  const listing = registry.renderListing(record, state)
+  assert.match(listing, /Not currently registered in this session: mcp__openviking__read/)
+})
+test('a bound tool no session can see is reported as unregistered', () => {
+  const { world, registry, record } = installed()
+  const group = record.groups.get([...record.groups.keys()][0]).group
+  assert.deepEqual(registry.unregistered(group), [])
+  world.remove(BOUND)
+  registry.reconcile()
+  assert.deepEqual(registry.unregistered(group), [BOUND])
+  world.add(BOUND)
+  registry.reconcile()
+  assert.deepEqual(registry.unregistered(group), [])
+})
+
+test('a group no session runs reports no verdict', () => {
+  const { registry } = installed()
+  assert.equal(registry.unregistered({ id: 'not-installed', tools: ['read'], presets: ['standard'] }), undefined)
 })

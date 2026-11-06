@@ -340,6 +340,9 @@ function GroupCard(props) {
   const fold = group.kind === 'fold'
   const needle = filter.trim().toLowerCase()
   const entries = catalog.filter(entry => needle === '' || entry.name.toLowerCase().includes(needle))
+
+  const unregistered = state?.unregistered?.[group.id] ?? []
+  const isMissing = name => unregistered.includes(name)
   const boundElsewhere = boundNames(state, group.id)
 
   const toggleTool = (name) => {
@@ -491,7 +494,11 @@ function GroupCard(props) {
       group.tools.length === 0
         ? React.createElement('small', { className: 'tf-muted' }, t('toolsEmpty'))
         : React.createElement('div', { className: 'tf-bound' }, group.tools.map(name =>
-          React.createElement('span', { key: name, className: 'tf-bound-chip' },
+          React.createElement('span', {
+            key: name,
+            className: isMissing(name) ? 'tf-bound-chip is-missing' : 'tf-bound-chip',
+            title: isMissing(name) ? t('missing') : undefined,
+          },
             React.createElement('span', null, name),
             React.createElement('button', {
               type: 'button',

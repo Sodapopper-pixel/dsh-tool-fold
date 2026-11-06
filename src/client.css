@@ -306,6 +306,16 @@ body[data-ds-dark-theme] .tf-field select {
   gap: 4px;
 }
 
+.tf-bound-chip.is-missing {
+  border-color: #d8a13a;
+  color: #8a6410;
+}
+
+body[data-ds-dark-theme] .tf-bound-chip.is-missing {
+  border-color: #8a6410;
+  color: #e5b567;
+}
+
 .tf-bound-chip {
   display: inline-flex;
   align-items: center;
