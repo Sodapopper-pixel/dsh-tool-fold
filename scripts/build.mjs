@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const hostModules = ['index.js', 'store.js', 'session.js', 'tools.js', 'http.js', 'origins.js']
+const hostModules = ['index.js', 'store.js', 'session.js', 'tools.js', 'http.js', 'origins.js', 'debuglog.js']
 
 /** Read one browser source and strip module syntax inside the factory scope. */
 function factorySource(name) {
