@@ -13,6 +13,9 @@ const KNOWN_TOOLS = /; known global tools: (.*)$/s
 /** Result text for a tool that produced no text block. */
 const NO_TEXT = '(no text output)'
 
+/** One description re-registration after a burst of registry changes settles, instead of one per change. */
+const DESCRIPTION_DEBOUNCE_MS = 250
+
 /**
  * Owns one record per live agent session.
  *
@@ -37,6 +40,7 @@ export class SessionRegistry {
     this.providers = undefined
     this.depth = 0
     this.sessionCounter = 0
+    this.descriptionTimer = undefined
   }
 
   /**
@@ -76,8 +80,10 @@ export class SessionRegistry {
    * plugin's fiber, so unloading the plugin must undo them here.
    */
   dispose() {
+    clearTimeout(this.descriptionTimer)
+    this.descriptionTimer = undefined
     for (const record of this.sessions.values()) {
-      for (const id of [...record.groups.keys()]) this.releaseGroup(record, id)
+      for (const id of [...record.groups.keys()]) this.releaseGroup(record, id, 'dispose')
     }
     this.sessions.clear()
   }
@@ -204,9 +210,32 @@ export class SessionRegistry {
       for (const tool of [...state.expanded]) {
         if (!bound.has(tool) || !names.has(tool)) state.expanded.delete(tool)
       }
-      this.syncDescription(record, state, names)
     }
     this.apply(record)
+    this.scheduleDescriptionSync()
+  }
+
+  /**
+   * Queue one description re-derivation for every session after the current burst settles.
+   * An MCP server registers its tools one by one, and each step fires `tools/change`; re-registering
+   * the query tool per step disposes and recreates it over and over, which reads as the query tool
+   * being repeatedly unloaded. Coalescing bursts keeps one re-registration per burst instead.
+   */
+  scheduleDescriptionSync() {
+    if (this.descriptionTimer !== undefined) return
+    this.descriptionTimer = setTimeout(() => {
+      this.descriptionTimer = undefined
+      this.flushDescriptions()
+    }, DESCRIPTION_DEBOUNCE_MS)
+  }
+
+  /** Re-derive every session's query-tool descriptions now, skipping sessions mid forwarded call. */
+  flushDescriptions() {
+    for (const record of this.sessions.values()) {
+      if (record.proxying > 0 || record.agent.ctx === undefined) continue
+      const names = record.available
+      for (const state of record.groups.values()) this.syncDescription(record, state, names)
+    }
   }
 
   /**
