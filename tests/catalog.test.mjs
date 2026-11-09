@@ -7,6 +7,7 @@ import { en, originLabel, zh } from '../src/client.js'
 /** A registry whose global layer and captured assemblies answer with fixed schemas. */
 function registryWith({ global = [], scoped = [] } = {}) {
   const registrations = []
+  const names = () => [...new Set([...global, ...scoped].map(entry => entry.name))]
   const ctx = {
     tools: {
       schemas: scope => (scope === undefined ? global : scoped),
@@ -14,7 +15,17 @@ function registryWith({ global = [], scoped = [] } = {}) {
         registrations.push(definition.name)
         return () => registrations.splice(registrations.indexOf(definition.name), 1)
       },
-      restrict: () => () => {},
+      restrict: filter => {
+        // The Host rejects unknown names and lists the inheritable surface; the probe reads
+        // that list, so the stub must reject the same way or nothing enumerates.
+        const deny = [...(filter?.deny ?? [])]
+        const unknown = deny.filter(name => !names().includes(name))
+        if (unknown.length > 0) {
+          const quoted = unknown.map(name => `"${name}"`).join(', ')
+          throw new Error(`tools.restrict() names unknown global tools ${quoted}; known global tools: ${names().sort().join(', ') || '(none)'}`)
+        }
+        return () => {}
+      },
       execute: async () => ({ content: [], isError: false }),
     },
   }

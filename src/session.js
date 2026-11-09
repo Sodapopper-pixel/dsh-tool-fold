@@ -135,23 +135,38 @@ export class SessionRegistry {
       // A renamed group keeps its id but needs a new registration: the old tool name is gone.
       if (existing !== undefined) this.releaseGroup(record, group.id, 'renamed')
       const state = { group, folded: new Set(), expanded: new Set(), restrictOff: undefined, disposeTool: undefined, described: undefined, rounds: new Map() }
-      this.registerQueryTool(record, state, 'created')
       record.groups.set(group.id, state)
     }
+    // Probe and fold first: a registration must describe the surface as it is, and a group
+    // whose bindings are all absent must not put a query tool on the surface at all.
     this.refreshBindings(record)
+    for (const state of record.groups.values()) {
+      if (state.described === undefined) this.registerQueryTool(record, state, 'created')
+    }
   }
 
   /**
    * Register one group's query tool, describing only the bindings this session actually carries.
    * A tool whose plugin is uninstalled stops being callable, so leaving it in the description
-   * would advertise a name that can only fail.
+   * would advertise a name that can only fail. With no bound tool present the tool is held off
+   * the surface entirely: a facade with nothing behind it is noise on the model's tool list.
    * @param record - the session record owning the group.
    * @param state - the group state to register for.
    */
   registerQueryTool(record, state, reason = 'new') {
-    state.disposeTool?.()
     const present = state.group.tools.filter(tool => record.available.has(tool))
-    this.trace(`register session=(${agentId(record)}) group=${state.group.name} reason=${reason} present=${present.length}/${state.group.tools.length} [${present.join(',') || '-'}]`)
+    if (present.length === 0) {
+      // No bound tool exists in this session: the query tool has nothing to list, search,
+      // expand or call, so it stays off the model's tool surface until one shows up.
+      state.disposeTool?.()
+      state.disposeTool = undefined
+      record.registered.delete(state.group.name)
+      state.described = undefined
+      this.trace(`hold session=(${agentId(record)}) group=${state.group.name} reason=${reason} bindings=0/${state.group.tools.length}`)
+      return
+    }
+    state.disposeTool?.()
+    this.trace(`register session=(${agentId(record)}) group=${state.group.name} reason=${reason} present=${present.length}/${state.group.tools.length} [${present.join(',')}]`)
     state.disposeTool = record.agent.ctx.tools.register(createQueryTool({
       group: state.group,
       runtime: this.runtimeFor(record, state),
@@ -163,12 +178,15 @@ export class SessionRegistry {
 
   /**
    * Re-register a group's query tool when the set of registered bindings changed.
+   * A group whose last binding disappeared drops its query tool; the first binding to
+   * come back puts it up again.
    * @param record - the session record owning the group.
    * @param state - the group state to check.
    * @param names - the names the session surface carries right now.
    */
   syncDescription(record, state, names) {
     const present = state.group.tools.filter(tool => names.has(tool))
+    if (present.length === 0 && state.described === undefined) return
     const before = state.described === undefined || state.described === '' ? 0 : state.described.split('\n').length
     if (state.described === present.join('\n')) return
     this.trace(`describe session=(${agentId(record)}) group=${state.group.name} bindings ${before}->${present.length}`)

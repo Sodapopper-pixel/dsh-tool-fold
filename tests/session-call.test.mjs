@@ -141,16 +141,29 @@ test('forget lifts a session but leaves other sessions folded', () => {
   assert.equal(record.proxying, 0)
 })
 
-test('a bound tool whose plugin is uninstalled drops out of the description', () => {
-  const { world, registry } = installed()
-  assert.match(world.definitions.get('memory').description, /mcp__openviking__read/)
+test('a group whose last binding disappears drops its query tool entirely', () => {
+  const { world, registry, state } = installed()
+  assert.equal(world.own.has('memory'), true)
   world.remove(BOUND)
   registry.reconcile()
   registry.flushDescriptions()
-  const description = world.definitions.get('memory').description
-  assert.doesNotMatch(description, /Bound tools: mcp__openviking__read/)
-  assert.match(description, /Bound but not registered in this session right now: mcp__openviking__read/)
-  assert.match(description, /folded batch of 0 tool/)
+  assert.equal(world.own.has('memory'), false, 'with nothing to offer the query tool is off the surface')
+  assert.equal(world.definitions.get('memory'), undefined)
+  assert.equal(state.folded.size, 0)
+})
+
+test('a group whose bindings are all absent holds its query tool until one appears', () => {
+  const { world, registry, record, state } = installed({ tools: ['bash'] })
+  assert.equal(world.own.has('memory'), false, 'nothing to offer, nothing on the surface')
+  assert.equal(world.definitions.get('memory'), undefined)
+  assert.equal(state.folded.size, 0)
+  assert.equal([...record.groups.values()].length, 1, 'the group state still exists for the returning tool')
+  world.add(BOUND)
+  registry.reconcile()
+  registry.flushDescriptions()
+  assert.equal(world.own.has('memory'), true, 'the first binding to appear puts the query tool up')
+  assert.equal(world.visibleNames().includes(BOUND), false, 'the returning tool is folded')
+  assert.match(world.definitions.get('memory').description, /Bound tools: mcp__openviking__read/)
 })
 
 test('a reinstalled tool is folded again and returns to the description', () => {

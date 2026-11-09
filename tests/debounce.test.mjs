@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SessionRegistry } from '../src/session.js'
 
-const BOUND = 'mcp__openviking__read'
+const TOOLS = ['mcp__openviking__read', 'mcp__openviking__write', 'mcp__openviking__list', 'mcp__openviking__search']
 
 /** A tool registry that behaves like the Host one, counting query-tool registrations. */
 function host() {
-  const globalNames = [BOUND]
+  const globalNames = [TOOLS[0]]
   const own = new Set()
   const denied = new Set()
   let registrations = 0
@@ -27,12 +27,13 @@ function host() {
         }
       },
       restrict(filter) {
+        // The Host lists the inheritable surface before this plugin's own folding, so `known`
+        // ignores `denied`: an MCP registration is visible to the probe the moment it exists.
         const deny = [...(filter?.deny ?? [])]
-        const known = visibleNames()
-        const unknown = deny.filter(name => !known.includes(name))
+        const unknown = deny.filter(name => !globalNames.includes(name))
         if (unknown.length > 0) {
           const quoted = unknown.map(name => `"${name}"`).join(', ')
-          throw new Error(`tools.restrict() names unknown global tools ${quoted}; known global tools: ${[...known].sort().join(', ')}`)
+          throw new Error(`tools.restrict() names unknown global tools ${quoted}; known global tools: ${[...globalNames].sort().join(', ') || '(none)'}`)
         }
         for (const name of deny) denied.add(name)
         return () => {
@@ -57,7 +58,7 @@ test('a burst of registry changes re-registers the query tool once', () => {
     readConfig: () => ({
       version: 1,
       groups: [
-        { id: 'g1', name: 'memory', kind: 'fold', tools: [BOUND], presets: ['standard'], listingForm: 'list', idleRetract: { enabled: false, rounds: 5 }, usageNote: '' },
+        { id: 'g1', name: 'memory', kind: 'fold', tools: TOOLS, presets: ['standard'], listingForm: 'list', idleRetract: { enabled: false, rounds: 5 }, usageNote: '' },
       ],
     }),
   })
@@ -65,8 +66,11 @@ test('a burst of registry changes re-registers the query tool once', () => {
   registry.install(agent, 'standard')
   registry.flushDescriptions()
   const before = world.registrations()
-  for (let index = 0; index < 5; index++) world.add(`mcp__openviking__extra${index}`)
-  registry.reconcile()
+  // One MCP server registering its tools one by one: each step fires `tools/change`.
+  for (const tool of TOOLS.slice(1)) {
+    world.add(tool)
+    registry.reconcile()
+  }
   registry.flushDescriptions()
   assert.equal(world.registrations() - before, 1, `expected one coalesced registration, got ${world.registrations() - before}`)
 })
